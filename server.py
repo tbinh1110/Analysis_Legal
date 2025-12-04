@@ -1,7 +1,8 @@
+# server.py
 import os
 from fastapi import FastAPI
 from pydantic import BaseModel
-from rag_model import generate_answer 
+from rag_model import generate_answer # Đảm bảo import đúng
 
 app = FastAPI()
 
@@ -14,8 +15,8 @@ def analyze_contract(data: ContractInput):
 
     # Kiểm tra API Key
     if not os.getenv("DEEPSEEK_API_KEY"):
-         return {
-            "status": "error", 
+        return {
+            "status": "error",
             "message": "Lỗi cấu hình: Biến môi trường DEEPSEEK_API_KEY không được tìm thấy."
         }
 
@@ -33,9 +34,10 @@ def analyze_contract(data: ContractInput):
 
     except Exception as e:
         # In lỗi chi tiết ra console Render để debug
-        print(f"🔥 LỖI CHÍNH XÁC: {str(e)}")
+        error_message = f"Có lỗi xảy ra trong quá trình xử lý: {str(e)}"
+        print(f"🔥 LỖI CHÍNH XÁC: {error_message}")
         
         return {
             "status": "error",
-            "message": f"Có lỗi xảy ra: {str(e)}"
+            "message": error_message
         }

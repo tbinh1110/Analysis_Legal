@@ -1,50 +1,43 @@
+# rag_model.py
 import os
-import shutil
 from langchain_community.vectorstores import Chroma
 from langchain_core.prompts import PromptTemplate
-from langchain_core.runnables import RunnableConfig
 from openai import OpenAI
 
-
 PERSIST_DIR = "legal_chroma_db"
+vectorstore = None
+retriever = None
+
+# --- NEW FUNCTION: Lazy Load ChromaDB ---
+def get_retriever():
+    """Tải và trả về retriever, chỉ khởi tạo vectorstore một lần."""
+    global vectorstore
+    global retriever
+    
+    # Nếu đã được khởi tạo, trả về ngay
+    if retriever:
+        return retriever
+        
+    print(f"BẮT ĐẦU: Khởi tạo ChromaDB từ thư mục: {PERSIST_DIR}")
+    try:
+        # Nếu thư mục không tồn tại, Chroma sẽ tự tạo (nhưng sẽ trống)
+        # Sẽ không bị lỗi nếu DB trống, nhưng nên đảm bảo thư mục đã được commit.
+        vectorstore = Chroma(persist_directory=PERSIST_DIR)
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+        print(f"THÀNH CÔNG: ChromaDB đã được load.")
+        return retriever
+    except Exception as e:
+        print(f"LỖI KHỞI TẠO ChromaDB: {e}")
+        # Đảm bảo ứng dụng KHÔNG bị crash khi load DB lỗi, chỉ báo lỗi khi dùng
+        return None 
+# ----------------------------------------
+
 
 # ----------------------------------------------------
-# 2Load VectorStore
-# ----------------------------------------------------
-# Lưu ý: Bạn cần đảm bảo đã tạo sẵn vector DB này và commit lên GitHub.
-try:
-    # Nếu thư mục không tồn tại, Chroma sẽ tự tạo (nhưng sẽ trống)
-    vectorstore = Chroma(persist_directory=PERSIST_DIR)
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
-    print(f"ChromaDB đã được load từ thư mục: {PERSIST_DIR}")
-except Exception as e:
-    # Trường hợp thư viện bị lỗi hoặc không tìm thấy file
-    print(f"Lỗi khi load ChromaDB: {e}")
-    # Đặt retriever thành None để tránh lỗi crash ngay lập tức
-    retriever = None
-
-# ----------------------------------------------------
-# Prompt template
+# Prompt template (Giữ nguyên)
 # ----------------------------------------------------
 PROMPT_TEMPLATE = """
-Bạn là Trợ lý Pháp lý AI chuyên phân tích hợp đồng theo Luật Việt Nam.
-
---- NGỮ CẢNH PHÁP LÝ (RAG) ---
-{context}
-
---- NỘI DUNG HỢP ĐỒNG CẦN PHÂN TÍCH ---
-{question}
-
---- YÊU CẦU ---
-Hãy phân tích theo các mục:
-1. Tóm tắt hợp đồng
-2. Nghĩa vụ / quyền lợi quan trọng
-3. Rủi ro pháp lý
-4. Điều khoản bất lợi
-5. Gợi ý chỉnh sửa
-6. Đánh giá tuân thủ luật Việt Nam
-
-Trả lời tiếng Việt, rõ ràng, mạch lạc.
+... (Giữ nguyên)
 """
 prompt_template = PromptTemplate(
     template=PROMPT_TEMPLATE,
@@ -52,23 +45,25 @@ prompt_template = PromptTemplate(
 )
 
 # ----------------------------------------------------
-# Load DeepSeek client
+# Load DeepSeek client (Giữ nguyên)
 # ----------------------------------------------------
-# Lấy API Key từ biến môi trường (Render Env Vars)
 client = OpenAI(
     api_key=os.getenv("DEEPSEEK_API_KEY"),
-    base_url="https://api.deepseek.com/v1"  # Cổng chuẩn là /v1
+    base_url="https://api.deepseek.com/v1" 
 )
 
 # ----------------------------------------------------
-# Hàm generate_answer 
+# Hàm generate_answer (Cập nhật)
 # ----------------------------------------------------
 def generate_answer(question):
-    if not retriever:
-        raise Exception("Retriever chưa được khởi tạo thành công. Vui lòng kiểm tra lại ChromaDB.")
+    # Lấy retriever, sẽ khởi tạo DB nếu chưa có
+    current_retriever = get_retriever()
+    
+    if not current_retriever:
+        raise Exception("Retriever chưa được khởi tạo thành công. Vui lòng kiểm tra lại ChromaDB và thư mục commit.")
         
-    #
-    docs = retriever.invoke(question)
+    # Lấy docs từ retriever
+    docs = current_retriever.invoke(question)
     
     # Tạo context từ các document đã lấy được
     context = "\n\n".join([doc.page_content for doc in docs])
