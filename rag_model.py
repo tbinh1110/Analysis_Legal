@@ -1,14 +1,12 @@
 # rag_model.py
 import os
-from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from langchain_community.vectorstores import Chroma
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.prompts import PromptTemplate
-from langchain_core.runnables import RunnableLambda
 from openai import OpenAI
 
-PERSIST_DIR = "./legal_chroma_db"
-EMBEDDING_MODEL = "truro7/vn-law-embedding"
+# Path lưu vectorstore đã train
+PERSIST_DIR = "/tmp/legal_chroma_db"
+os.makedirs(PERSIST_DIR, exist_ok=True)
 
 # Load DeepSeek API client
 client = OpenAI(
@@ -16,18 +14,8 @@ client = OpenAI(
     base_url="https://api.deepseek.com"
 )
 
-# Load embedding + vectorstore
-def load_vectorstore():
-    embeddings = HuggingFaceBgeEmbeddings(
-        model_name=EMBEDDING_MODEL,
-        model_kwargs={"device": "cpu"}
-    )
-    return Chroma(
-        persist_directory=PERSIST_DIR,
-        embedding_function=embeddings
-    )
-
-vectorstore = load_vectorstore()
+# Chỉ load vectorstore đã có sẵn, không load model HuggingFace
+vectorstore = Chroma(persist_directory=PERSIST_DIR)
 retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
 PROMPT_TEMPLATE = """
@@ -66,7 +54,7 @@ def generate_answer(context, question):
             {"role": "user", "content": final_prompt}
         ],
         temperature=0.2,
-        max_tokens=1024
+        max_tokens=512
     )
 
     return response.choices[0].message["content"]
