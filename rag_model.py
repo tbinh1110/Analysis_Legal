@@ -3,21 +3,15 @@ from langchain_community.vectorstores import Chroma
 from langchain_core.prompts import PromptTemplate
 from openai import OpenAI
 
-# Path lưu vectorstore đã train
+# 1️⃣ Path lưu Vector DB
 PERSIST_DIR = "/tmp/legal_chroma_db"
 os.makedirs(PERSIST_DIR, exist_ok=True)
 
-# Load DeepSeek API client
-client = OpenAI(
-    api_key=os.getenv("DEEPSEEK_API_KEY"),
-    base_url="https://api.deepseek.com"
-)
-
-# Load vectorstore đã train sẵn (chỉ load từ persist)
+# 2️⃣ Load VectorStore
 vectorstore = Chroma(persist_directory=PERSIST_DIR)
 retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
-# Prompt template
+# 3️⃣ Prompt template
 PROMPT_TEMPLATE = """
 Bạn là Trợ lý Pháp lý AI chuyên phân tích hợp đồng theo Luật Việt Nam.
 
@@ -38,21 +32,27 @@ Hãy phân tích theo các mục:
 
 Trả lời tiếng Việt, rõ ràng, mạch lạc.
 """
-
-prompt = PromptTemplate(
+prompt_template = PromptTemplate(
     template=PROMPT_TEMPLATE,
     input_variables=["context", "question"]
 )
 
+# 4️⃣ Load DeepSeek client
+client = OpenAI(
+    api_key=os.getenv("DEEPSEEK_API_KEY"),
+    base_url="https://api.deepseek.com"
+)
+
+# 5️⃣ Hàm generate_answer
 def generate_answer(question):
-    # 1. Truy xuất ngữ cảnh từ VectorStore
-    relevant_docs = retriever.get_relevant_documents(question)  # trả về list[Document]
-    context = "\n\n".join([doc.page_content for doc in relevant_docs])
+    # Lấy các document liên quan
+    docs = retriever.get_relevant_documents(question)  # list[Document]
+    context = "\n\n".join([doc.page_content for doc in docs])
 
-    # 2. Tạo prompt cuối cùng
-    final_prompt = prompt.format(context=context, question=question)
+    # Tạo prompt cuối cùng
+    final_prompt = prompt_template.format(context=context, question=question)
 
-    # 3. Gọi DeepSeek API
+    # Gọi DeepSeek API
     response = client.chat.completions.create(
         model="deepseek-chat",
         messages=[
@@ -63,6 +63,7 @@ def generate_answer(question):
         max_tokens=512
     )
 
-    # 4. Trả kết quả
     return response.choices[0].message["content"]
 
+# 6️⃣ Export
+__all__ = ["retriever", "generate_answer"]
