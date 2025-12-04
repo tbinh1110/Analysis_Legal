@@ -1,4 +1,3 @@
-# rag_model.py
 import os
 from langchain_community.vectorstores import Chroma
 from langchain_core.prompts import PromptTemplate
@@ -14,10 +13,11 @@ client = OpenAI(
     base_url="https://api.deepseek.com"
 )
 
-# Chỉ load vectorstore đã có sẵn, không load model HuggingFace
+# Load vectorstore đã train sẵn (chỉ load từ persist)
 vectorstore = Chroma(persist_directory=PERSIST_DIR)
 retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
+# Prompt template
 PROMPT_TEMPLATE = """
 Bạn là Trợ lý Pháp lý AI chuyên phân tích hợp đồng theo Luật Việt Nam.
 

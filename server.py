@@ -1,4 +1,3 @@
-# server.py
 import os
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -14,11 +13,11 @@ def analyze_contract(data: ContractInput):
     query = data.contract_text
 
     try:
-        # Retrieve legal context
+        # Lấy các tài liệu liên quan từ vectorstore (sync)
         docs = retriever.get_relevant_documents(query)
         context = "\n\n".join([d.page_content for d in docs])
 
-        # Generate answer via DeepSeek
+        # Gọi DeepSeek để sinh phân tích
         answer = generate_answer(context, query)
 
         return {
