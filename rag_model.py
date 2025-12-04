@@ -1,12 +1,68 @@
-# rag_model.py
 import os
 from langchain_community.vectorstores import Chroma
 from langchain_core.prompts import PromptTemplate
 from openai import OpenAI
+from typing import List
+import requests # Cần để gọi API
+import json
+from langchain_core.embeddings import Embeddings 
 
 PERSIST_DIR = "legal_chroma_db"
 vectorstore = None
 retriever = None
+
+# ----------------------------------------------------
+# ĐỊNH NGHĨA CUSTOM EMBEDDING FUNCTION
+# ----------------------------------------------------
+class CustomLegalEmbedding(Embeddings):
+    """Gửi yêu cầu embedding đến API Endpoint trên Hugging Face Spaces."""
+    def __init__(self, endpoint_url: str):
+        self.endpoint_url = endpoint_url
+        self.headers = {"Content-Type": "application/json"}
+        # Giả định mô hình truro7/vn-law-embedding có dimension 768
+        self.expected_dim = 768 
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        # Thực hiện từng truy vấn nhỏ để tránh payload quá lớn
+        return [self.embed_query(text) for text in texts]
+
+    def embed_query(self, text: str) -> List[float]:
+        payload = {"text": text} 
+        
+        try:
+            # Gửi request đến API Hugging Face
+            response = requests.post(self.endpoint_url, headers=self.headers, data=json.dumps(payload))
+            response.raise_for_status() 
+            
+            data = response.json()
+            vector = data.get('embedding')
+            
+            if not vector:
+                raise ValueError("API did not return 'embedding'.")
+
+            # Kiểm tra kích thước vector để đảm bảo khớp DB
+            if len(vector) != self.expected_dim:
+                 raise ValueError(f"API returned dimension {len(vector)}, expected {self.expected_dim}.")
+
+            return vector
+        except Exception as e:
+            # Nếu có lỗi, in ra và raise lại để hệ thống xử lý
+            print(f"Lỗi gọi Custom Embedding API: {e}")
+            raise
+
+# ----------------------------------------------------
+# KHỞI TẠO EMBEDDING API CUSTOM
+# ----------------------------------------------------
+# THAY THẾ URL NÀY BẰNG URL BẠN CÓ ĐƯỢC TỪ HUGGING FACE SPACES
+HF_EMBEDDING_ENDPOINT = "https://[YOUR-USERNAME]-[YOUR-SPACE-NAME].hf.space/embed" 
+
+try:
+    embedding_function = CustomLegalEmbedding(endpoint_url=HF_EMBEDDING_ENDPOINT)
+    print("Custom Embedding function (truro7/vn-law-embedding qua API) đã được tạo.")
+except Exception as e:
+    print(f"LỖI: Không thể khởi tạo Custom Embedding API: {e}")
+    embedding_function = None
+
 
 # --- NEW FUNCTION: Lazy Load ChromaDB ---
 def get_retriever():
@@ -14,22 +70,26 @@ def get_retriever():
     global vectorstore
     global retriever
     
-    # Nếu đã được khởi tạo, trả về ngay
     if retriever:
         return retriever
-        
-    print(f"BẮT ĐẦU: Khởi tạo ChromaDB từ thư mục: {PERSIST_DIR}")
+    
+    if embedding_function is None:
+        print("LỖI: Embedding function API không tồn tại.")
+        return None
+
+    print(f"BẮT ĐẦU: Khởi tạo ChromaDB từ thư mục: {PERSIST_DIR} (Dùng Custom API)")
     try:
-        # Nếu thư mục không tồn tại, Chroma sẽ tự tạo (nhưng sẽ trống)
-        # Sẽ không bị lỗi nếu DB trống, nhưng nên đảm bảo thư mục đã được commit.
-        vectorstore = Chroma(persist_directory=PERSIST_DIR)
+        # SỬ DỤNG CUSTOM EMBEDDING FUNCTION ĐÃ KHÔNG CẦN TẢI MODEL NẶNG
+        vectorstore = Chroma(
+            persist_directory=PERSIST_DIR,
+            embedding_function=embedding_function 
+        )
         retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
         print(f"THÀNH CÔNG: ChromaDB đã được load.")
         return retriever
     except Exception as e:
         print(f"LỖI KHỞI TẠO ChromaDB: {e}")
-        # Đảm bảo ứng dụng KHÔNG bị crash khi load DB lỗi, chỉ báo lỗi khi dùng
-        return None 
+        return None
 # ----------------------------------------
 
 
