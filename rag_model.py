@@ -44,9 +44,15 @@ prompt = PromptTemplate(
     input_variables=["context", "question"]
 )
 
-def generate_answer(context, question):
+def generate_answer(question):
+    # 1. Truy xuất ngữ cảnh từ VectorStore
+    relevant_docs = retriever.get_relevant_documents(question)  # trả về list[Document]
+    context = "\n\n".join([doc.page_content for doc in relevant_docs])
+
+    # 2. Tạo prompt cuối cùng
     final_prompt = prompt.format(context=context, question=question)
 
+    # 3. Gọi DeepSeek API
     response = client.chat.completions.create(
         model="deepseek-chat",
         messages=[
@@ -57,4 +63,6 @@ def generate_answer(context, question):
         max_tokens=512
     )
 
+    # 4. Trả kết quả
     return response.choices[0].message["content"]
+
