@@ -1,17 +1,31 @@
 import os
+import shutil
 from langchain_community.vectorstores import Chroma
 from langchain_core.prompts import PromptTemplate
+from langchain_core.runnables import RunnableConfig
 from openai import OpenAI
 
-# 1️⃣ Path lưu Vector DB
-PERSIST_DIR = "/tmp/legal_chroma_db"
-os.makedirs(PERSIST_DIR, exist_ok=True)
 
-# 2️⃣ Load VectorStore
-vectorstore = Chroma(persist_directory=PERSIST_DIR)
-retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+PERSIST_DIR = "legal_chroma_db"
 
-# 3️⃣ Prompt template
+# ----------------------------------------------------
+# 2Load VectorStore
+# ----------------------------------------------------
+# Lưu ý: Bạn cần đảm bảo đã tạo sẵn vector DB này và commit lên GitHub.
+try:
+    # Nếu thư mục không tồn tại, Chroma sẽ tự tạo (nhưng sẽ trống)
+    vectorstore = Chroma(persist_directory=PERSIST_DIR)
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+    print(f"ChromaDB đã được load từ thư mục: {PERSIST_DIR}")
+except Exception as e:
+    # Trường hợp thư viện bị lỗi hoặc không tìm thấy file
+    print(f"Lỗi khi load ChromaDB: {e}")
+    # Đặt retriever thành None để tránh lỗi crash ngay lập tức
+    retriever = None
+
+# ----------------------------------------------------
+# Prompt template
+# ----------------------------------------------------
 PROMPT_TEMPLATE = """
 Bạn là Trợ lý Pháp lý AI chuyên phân tích hợp đồng theo Luật Việt Nam.
 
@@ -37,16 +51,26 @@ prompt_template = PromptTemplate(
     input_variables=["context", "question"]
 )
 
-# 4️⃣ Load DeepSeek client
+# ----------------------------------------------------
+# Load DeepSeek client
+# ----------------------------------------------------
+# Lấy API Key từ biến môi trường (Render Env Vars)
 client = OpenAI(
     api_key=os.getenv("DEEPSEEK_API_KEY"),
-    base_url="https://api.deepseek.com"
+    base_url="https://api.deepseek.com/v1"  # Cổng chuẩn là /v1
 )
 
-# 5️⃣ Hàm generate_answer
+# ----------------------------------------------------
+# Hàm generate_answer 
+# ----------------------------------------------------
 def generate_answer(question):
-    # Lấy các document liên quan
-    docs = retriever.retrieve(question)
+    if not retriever:
+        raise Exception("Retriever chưa được khởi tạo thành công. Vui lòng kiểm tra lại ChromaDB.")
+        
+    #
+    docs = retriever.invoke(question)
+    
+    # Tạo context từ các document đã lấy được
     context = "\n\n".join([doc.page_content for doc in docs])
 
     # Tạo prompt cuối cùng
@@ -63,7 +87,7 @@ def generate_answer(question):
         max_tokens=512
     )
 
-    return response.choices[0].message["content"]
+    return response.choices[0].message.content
 
-# 6️⃣ Export
-__all__ = ["retriever", "generate_answer"]
+
+__all__ = ["generate_answer"]
