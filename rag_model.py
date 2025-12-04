@@ -46,7 +46,7 @@ client = OpenAI(
 # 5️⃣ Hàm generate_answer
 def generate_answer(question):
     # Lấy các document liên quan
-    docs = retriever.get_relevant_documents(question)  # list[Document]
+    docs = retriever.retrieve(question)
     context = "\n\n".join([doc.page_content for doc in docs])
 
     # Tạo prompt cuối cùng
