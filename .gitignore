@@ -1,0 +1,14 @@
+# Không upload file .env
+.env
+
+# Không upload cache Python
+__pycache__/
+
+# Không upload compiled files
+*.pyc
+
+# Không upload notebook checkpoint
+.ipynb_checkpoints/
+
+# Không upload folder logs nếu có
+logs/
